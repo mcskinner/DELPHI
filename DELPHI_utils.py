@@ -451,12 +451,23 @@ def get_initial_conditions(params_fitted, global_params_fixed):
     N, PopulationCI, PopulationR, PopulationD, PopulationI, p_d, p_h, p_v = global_params_fixed
     S_0 = (
             (N - PopulationCI / p_d) -
+            # CI / p_d is true currently infected, k1+k2 rescales. But why do we need to deduct CI a second time?
             (PopulationCI / p_d * (k1 + k2)) -
             (PopulationR / p_d) -
             (PopulationD / p_d)
     )
+
+    # This rescaling by k1 also happens here, to get to Exposed at t0.
+    # So I suppose the idea is that k1 describes the ratio of currently infected to exposed?
     E_0 = PopulationCI / p_d * k1
+
+    # And here by k2 to get to the Infected at t0.
+    # So that means k2 is measuring the ratio of currently infected to overall infected?
     I_0 = PopulationCI / p_d * k2
+
+    # My impression is that k1 and k2 should not be free parameters.
+    # They look related to other, true, parameters in the optimization.
+
     AR_0 = (PopulationCI / p_d - PopulationCI) * (1 - p_dth)
     DHR_0 = (PopulationCI * p_h) * (1 - p_dth)
     DQR_0 = PopulationCI * (1 - p_h) * (1 - p_dth)
@@ -500,11 +511,7 @@ def convert_dates_us_policies(x):
 
 
 def read_policy_data_us_only():
-    data_path = (
-        "E:/Github/DELPHI/data_sandbox"
-        # "/Users/hamzatazi/Desktop/MIT/999.1 Research Assistantship/" +
-        # "4. COVID19_Global/DELPHI/data_sandbox"
-    )
+    data_path = "data_sandbox"
     df = pd.read_csv(data_path + "/25042020_raw_policy_data_US_only.csv")
     df.State = df.State.apply(lambda x: x[0].upper() + x[1:])
     concat_data = []

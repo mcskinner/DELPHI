@@ -9,26 +9,28 @@ from DELPHI_utils import (
 )
 import dateutil.parser as dtparser
 import os
+import sys
+
+param_MATHEMATICA = False
 
 yesterday = "".join(str(datetime.now().date() - timedelta(days=1)).split("-"))
-# TODO: Find a way to make these paths automatic, whoever the user is...
-PATH_TO_FOLDER_DANGER_MAP = (
-    # "E:/Github/covid19orc/danger_map"
-    "/Users/hamzatazi/Desktop/MIT/999.1 Research Assistantship/" +
-    "4. COVID19_Global/covid19orc/danger_map"
-)
-PATH_TO_WEBSITE_PREDICTED = (
-    "E:/Github/website/data"
-)
-popcountries = pd.read_csv(
-    PATH_TO_FOLDER_DANGER_MAP + f"processed/Global/Population_Global.csv"
-)
+
+FILE_ROOT = os.path.dirname(__file__)
+DATA_ROOT = os.path.join(FILE_ROOT, 'data')
+OUTPUT_ROOT = os.path.join(FILE_ROOT, 'out')
+if len(sys.argv) == 3:
+    DATA_ROOT = sys.argv[1]
+    OUTPUT_ROOT = sys.argv[2]
+
+os.makedirs(os.path.join(OUTPUT_ROOT, 'webpred', 'predicted'), exist_ok=True)
+os.makedirs(os.path.join(OUTPUT_ROOT, 'dangermap', 'predicted'), exist_ok=True)
+
+popcountries = pd.read_csv(os.path.join(DATA_ROOT, "processed", "Population_Global.csv"))
 try:
-    pastparameters = pd.read_csv(
-        PATH_TO_FOLDER_DANGER_MAP + f"predicted/Parameters_Global_Python_{yesterday}.csv"
-    )
+    pastparameters = pd.read_csv(os.path.join(OUTPUT_ROOT, "webpred", "predicted", f"Parameters_Global_Python_{yesterday}.csv"))
 except:
     pastparameters = None
+
 # Initalizing lists of the different dataframes that will be concatenated in the end
 list_df_global_predictions_since_today = []
 list_df_global_predictions_since_100_cases = []
@@ -41,10 +43,8 @@ for continent, country, province in zip(
 ):
     country_sub = country.replace(" ", "_")
     province_sub = province.replace(" ", "_")
-    if os.path.exists(f"processed/Global/Cases_{country_sub}_{province_sub}.csv"):
-        totalcases = pd.read_csv(
-            PATH_TO_FOLDER_DANGER_MAP + f"processed/Global/Cases_{country_sub}_{province_sub}.csv"
-        )
+    if os.path.exists(os.path.join(DATA_ROOT, "processed", f"Cases_{country_sub}_{province_sub}.csv")):
+        totalcases = pd.read_csv(os.path.join(DATA_ROOT, "processed", f"Cases_{country_sub}_{province_sub}.csv"))
         if totalcases.day_since100.max() < 0:
             print(f"Not enough cases for Continent={continent}, Country={country} and Province={province}")
             continue
@@ -85,10 +85,14 @@ for continent, country, province in zip(
                 ].reset_index(drop=True)
         else:
             # Otherwise use established lower/upper bounds
+            # How were these bounds established?
+            # Why is p_dth set to the minimum value to start, while everything else is centered?
             parameter_list = [1, 0, 2, 0.2, 0.05, 3, 3]
             bounds_params = (
                 (0.75, 1.25), (-10, 10), (1, 3), (0.05, 0.5), (0.01, 0.25), (0.1, 10), (0.1, 10)
             )
+            # parameter_list = [lo + np.asscalar(np.random.random(1)) * (hi - lo) for lo, hi in bounds_params]
+            # print(parameter_list)
             date_day_since100 = pd.to_datetime(totalcases.loc[totalcases.day_since100 == 0, "date"].iloc[-1])
             validcases = totalcases[totalcases.day_since100 >= 0][
                 ["day_since100", "case_cnt", "death_cnt"]
@@ -105,6 +109,10 @@ for continent, country, province in zip(
             # We do not scale
             N = PopulationT
             PopulationI = validcases.loc[0, "case_cnt"]
+
+            # Why times 5? Is this some hidden parameter?
+            # The paper says p_d, rate of detection, is fixed at 0.2.
+            # But the death count is also 20% of the recovered count?
             PopulationR = validcases.loc[0, "death_cnt"] * 5
             PopulationD = validcases.loc[0, "death_cnt"]
             PopulationCI = PopulationI - PopulationD - PopulationR
@@ -123,7 +131,8 @@ for continent, country, province in zip(
             RecoverHD = 15  # Recovery Time when Hospitalized
             VentilatedD = 10  # Recovery Time when Ventilated
             # Maximum timespan of prediction, defaulted to go to 15/06/2020
-            maxT = (datetime(2020, 6, 15) - date_day_since100).days + 1
+            # maxT = (datetime(2020, 6, 15) - date_day_since100).days + 1
+            maxT = (datetime(2020, 9, 1) - date_day_since100).days + 1
             p_v = 0.25  # Percentage of ventilated
             p_d = 0.2  # Percentage of infection cases detected.
             p_h = 0.15  # Percentage of detected cases hospitalized
@@ -218,6 +227,7 @@ for continent, country, province in zip(
             best_params = output.x
             obj_value = obj_value + output.fun
             print(obj_value)
+            print(best_params)
             t_predictions = [i for i in range(maxT)]
 
             def solve_best_params_and_predict(optimal_params):
@@ -282,8 +292,8 @@ df_global_predictions_since_100_cases = DELPHIAggregations.append_all_aggregatio
     df_global_predictions_since_100_cases
 )
 delphi_data_saver = DELPHIDataSaver(
-    path_to_folder_danger_map=PATH_TO_FOLDER_DANGER_MAP,
-    path_to_website_predicted=PATH_TO_WEBSITE_PREDICTED,
+    path_to_folder_danger_map=os.path.join(OUTPUT_ROOT, 'dangermap'),
+    path_to_website_predicted=os.path.join(OUTPUT_ROOT, 'webpred'),
     df_global_parameters=df_global_parameters,
     df_global_predictions_since_today=df_global_predictions_since_today,
     df_global_predictions_since_100_cases=df_global_predictions_since_100_cases,

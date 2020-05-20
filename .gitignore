@@ -1,0 +1,4 @@
+__pycache__/
+dockerout/
+out/
+.DS_Store
